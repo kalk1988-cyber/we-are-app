@@ -1,0 +1,16 @@
+{
+  "name": "we-are",
+  "version": "1.0.0",
+  "description": "We Are — মাল্টি-ইউজার অ্যাপ: রেজিস্ট্রেশন/লগইন, প্রোফাইল, অ্যাডমিন প্যানেল, পয়েন্ট-ভিত্তিক লুডু ও তাশ গেম",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "socket.io": "^4.7.5"
+  }
+}
