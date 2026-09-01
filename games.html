@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>গেমস — We Are</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="navbar">
+    <div class="brand">We Are</div>
+    <nav>
+      <a href="profile.html">প্রোফাইল</a>
+      <a href="games.html" class="active">গেমস</a>
+      <a href="#" onclick="logout()">লগআউট</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div id="pointsDisplay" class="points-badge"></div>
+      <p class="hint">পয়েন্ট দিয়ে রুম আনলক হয় (রিয়েল টাকা নয়, শুধু অ্যাপের ভেতরের স্কোর)। গেম জিতলে আরও পয়েন্ট পাবেন।</p>
+    </div>
+
+    <div class="card">
+      <h2>🎲 লুডু</h2>
+      <div id="luduTiers"></div>
+    </div>
+
+    <div class="card">
+      <h2>🃏 তাশ (কল ব্রেক ধাঁচের)</h2>
+      <div id="cardTiers"></div>
+    </div>
+
+    <div class="card">
+      <h3>বন্ধুর রুমে জয়েন করুন</h3>
+      <label>রুম কোড</label>
+      <input type="text" id="joinCode" placeholder="যেমন: A1B2C" style="text-transform:uppercase" />
+      <button onclick="joinByCode()">জয়েন করুন</button>
+      <div id="joinMsg"></div>
+    </div>
+  </div>
+
+  <script src="js/main.js"></script>
+  <script>
+    requireLogin();
+    let tiersData = null;
+
+    async function loadTiers() {
+      tiersData = await apiGet('/api/games/tiers');
+      document.getElementById('pointsDisplay').innerText = `🪙 ${tiersData.points.toLocaleString('bn-BD')} পয়েন্ট`;
+
+      const luduEl = document.getElementById('luduTiers');
+      const cardEl = document.getElementById('cardTiers');
+      luduEl.innerHTML = '';
+      cardEl.innerHTML = '';
+
+      tiersData.tiers.forEach((t) => {
+        luduEl.appendChild(tierCard(t, 'ludu'));
+        cardEl.appendChild(tierCard(t, 'card'));
+      });
+    }
+
+    function tierCard(t, gameType) {
+      const div = document.createElement('div');
+      div.className = `tier-card ${t.unlocked ? '' : 'locked'}`;
+      div.innerHTML = `
+        <div>
+          <div class="tier-name">${t.label} রুম</div>
+          <div class="tier-req">${t.unlocked ? 'আনলক করা আছে' : `${t.minPoints.toLocaleString('bn-BD')} পয়েন্ট লাগবে`}</div>
+        </div>
+        <button ${t.unlocked ? '' : 'disabled'} onclick="createRoom('${gameType}', '${t.key}')">নতুন রুম</button>
+      `;
+      return div;
+    }
+
+    async function createRoom(gameType, tier) {
+      try {
+        const data = await apiPost('/api/games/rooms', { gameType, tier });
+        window.location.href = `${gameType}.html?room=${data.code}`;
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function joinByCode() {
+      const code = document.getElementById('joinCode').value.trim().toUpperCase();
+      const msgEl = document.getElementById('joinMsg');
+      if (!code) return;
+      try {
+        const info = await apiGet(`/api/games/rooms/${code}`);
+        window.location.href = `${info.gameType}.html?room=${info.code}`;
+      } catch (err) {
+        msgEl.innerHTML = `<div class="msg error">${err.message}</div>`;
+      }
+    }
+
+    loadTiers();
+  </script>
+</body>
+</html>

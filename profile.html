@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>আমার প্রোফাইল — We Are</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="navbar">
+    <div class="brand">We Are</div>
+    <nav>
+      <a href="profile.html" class="active">প্রোফাইল</a>
+      <a href="games.html">গেমস</a>
+      <a href="#" onclick="logout()">লগআউট</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2 id="welcomeMsg">স্বাগতম</h2>
+      <div id="pointsDisplay" class="points-badge"></div>
+      <label>নাম</label>
+      <input type="text" id="name" />
+      <label>ইমেইল</label>
+      <input type="text" id="email" disabled />
+      <button onclick="updateProfile()">আপডেট করুন</button>
+      <div id="msg"></div>
+    </div>
+
+    <div class="card">
+      <h3>🎮 গেম খেলুন</h3>
+      <p class="hint">লুডু বা তাশ খেলে পয়েন্ট জিতুন, নতুন রুম আনলক করুন।</p>
+      <a class="btn" href="games.html">গেম হাবে যান</a>
+    </div>
+  </div>
+
+  <script src="js/main.js"></script>
+  <script>
+    requireLogin();
+
+    async function loadProfile() {
+      try {
+        const data = await apiGet('/api/me');
+        document.getElementById('welcomeMsg').innerText = `স্বাগতম, ${data.user.name}`;
+        document.getElementById('pointsDisplay').innerText = `🪙 ${data.user.points.toLocaleString('bn-BD')} পয়েন্ট`;
+        document.getElementById('name').value = data.user.name;
+        document.getElementById('email').value = data.user.email;
+      } catch (err) {
+        if (err.message.includes('টোকেন') || err.message.includes('লগইন')) {
+          logout();
+        }
+      }
+    }
+
+    async function updateProfile() {
+      const name = document.getElementById('name').value;
+      const msgEl = document.getElementById('msg');
+      try {
+        await apiPut('/api/me', { name });
+        msgEl.innerHTML = '<div class="msg success">প্রোফাইল আপডেট হয়েছে</div>';
+      } catch (err) {
+        msgEl.innerHTML = `<div class="msg error">${err.message}</div>`;
+      }
+    }
+
+    loadProfile();
+  </script>
+</body>
+</html>

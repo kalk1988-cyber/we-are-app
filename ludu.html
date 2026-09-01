@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>লুডু — We Are</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="navbar">
+    <div class="brand">We Are</div>
+    <nav>
+      <a href="profile.html">প্রোফাইল</a>
+      <a href="games.html">গেমস</a>
+      <a href="#" onclick="logout()">লগআউট</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2>🎲 লুডু — রুম কোড: <span id="roomCodeLabel"></span></h2>
+      <p class="hint">এই কোডটা বন্ধুদের পাঠান, তারা "গেমস" পেজ থেকে কোড দিয়ে জয়েন করতে পারবে।</p>
+      <div id="seatList" class="seat-list"></div>
+      <button id="startBtn" onclick="startGame()" style="display:none;">গেম শুরু করুন</button>
+      <div id="msg"></div>
+    </div>
+
+    <div class="card" id="gameCard" style="display:none;">
+      <div id="turnInfo" style="margin-bottom:10px; font-weight:600;"></div>
+      <div id="diceArea" style="margin-bottom:14px;">
+        <button id="rollBtn" onclick="rollDice()">🎲 দান চালুন</button>
+        <span id="diceResult" style="font-size:24px; margin-left:10px;"></span>
+      </div>
+      <div id="tokensArea"></div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+      <h3 id="resultText"></h3>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    requireLogin();
+    const params = new URLSearchParams(window.location.search);
+    const roomCode = params.get('room');
+    document.getElementById('roomCodeLabel').innerText = roomCode || '(কোড নেই)';
+
+    const me = JSON.parse(localStorage.getItem('user') || 'null');
+    const token = localStorage.getItem('token');
+    const socket = io();
+
+    if (!roomCode) {
+      document.getElementById('msg').innerHTML = '<div class="msg error">কোনো রুম কোড দেওয়া হয়নি</div>';
+    } else {
+      socket.emit('join-room', { roomCode, token });
+    }
+
+    socket.on('error-msg', (m) => {
+      document.getElementById('msg').innerHTML = `<div class="msg error">${m}</div>`;
+    });
+
+    socket.on('room-update', (data) => {
+      const seatList = document.getElementById('seatList');
+      seatList.innerHTML = '';
+      data.seats.forEach((s) => {
+        const chip = document.createElement('span');
+        chip.className = 'seat-chip';
+        chip.innerText = s.name;
+        seatList.appendChild(chip);
+      });
+      if (data.status === 'waiting') {
+        document.getElementById('startBtn').style.display = 'inline-block';
+      }
+    });
+
+    function startGame() {
+      socket.emit('start-game', { roomCode });
+    }
+
+    const COLOR_LABEL = { red: 'লাল', green: 'সবুজ', yellow: 'হলুদ', blue: 'নীল' };
+
+    socket.on('ludu-state', (state) => {
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('gameCard').style.display = 'block';
+
+      const isMyTurn = state.currentPlayerId === me.id;
+      const currentPlayerObj = state.players.find(p => p.id === state.currentPlayerId);
+      document.getElementById('turnInfo').innerText = isMyTurn
+        ? '👉 এখন আপনার পালা'
+        : `⏳ ${currentPlayerObj ? currentPlayerObj.name : ''}-এর পালা`;
+
+      document.getElementById('diceResult').innerText = state.lastDice ? `🎲 ${state.lastDice}` : '';
+      document.getElementById('rollBtn').disabled = !isMyTurn || state.lastDice !== null;
+
+      const tokensArea = document.getElementById('tokensArea');
+      tokensArea.innerHTML = '';
+      state.players.forEach((p) => {
+        const row = document.createElement('div');
+        row.style.marginBottom = '10px';
+        const label = document.createElement('div');
+        label.innerHTML = `<span class="token-dot token-${p.color}" style="display:inline-block;vertical-align:middle;margin-right:6px;"></span> <b>${p.name}</b> (${COLOR_LABEL[p.color]})`;
+        row.appendChild(label);
+
+        const tokensRow = document.createElement('div');
+        tokensRow.style.display = 'flex';
+        tokensRow.style.gap = '8px';
+        tokensRow.style.marginTop = '4px';
+
+        state.tokens[p.color].forEach((pos, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'small';
+          btn.innerText = posLabel(pos);
+          const canMove = isMyTurn && p.id === me.id && state.movableTokens && state.movableTokens.includes(idx) && state.lastDice !== null;
+          btn.disabled = !canMove;
+          btn.onclick = () => moveToken(idx);
+          tokensRow.appendChild(btn);
+        });
+        row.appendChild(tokensRow);
+        tokensArea.appendChild(row);
+      });
+
+      if (state.winner) {
+        document.getElementById('resultCard').style.display = 'block';
+        const winnerName = state.players.find(p => p.id === state.winner)?.name;
+        document.getElementById('resultText').innerText = `🏆 বিজয়ী: ${winnerName}`;
+        document.getElementById('rollBtn').disabled = true;
+      }
+    });
+
+    function posLabel(pos) {
+      if (pos === -1) return 'ইয়ার্ডে';
+      if (pos === 999) return '✅ ঘরে';
+      if (pos >= 100) return `হোম-${pos - 100 + 1}`;
+      return `ঘর ${pos}`;
+    }
+
+    function rollDice() {
+      socket.emit('ludu-roll', { roomCode });
+    }
+
+    function moveToken(tokenIdx) {
+      socket.emit('ludu-move', { roomCode, tokenIdx });
+    }
+
+    socket.on('game-over', (data) => {
+      const msg = data.winnerId === me.id
+        ? `🎉 আপনি জিতেছেন! +${data.reward.winner} পয়েন্ট পেয়েছেন`
+        : `খেলা শেষ। অংশগ্রহণের জন্য +${data.reward.participant} পয়েন্ট পেয়েছেন`;
+      document.getElementById('msg').innerHTML = `<div class="msg success">${msg}</div>`;
+    });
+  </script>
+</body>
+</html>

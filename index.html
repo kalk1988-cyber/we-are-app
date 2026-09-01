@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>লগইন / রেজিস্ট্রেশন — We Are</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="navbar">
+    <div class="brand">We Are</div>
+    <nav>
+      <a href="index.html" class="active">লগইন</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="tabs">
+      <button id="tabLogin" class="active" onclick="showTab('login')">লগইন</button>
+      <button id="tabRegister" onclick="showTab('register')">রেজিস্ট্রেশন</button>
+    </div>
+
+    <div class="card" id="loginCard">
+      <h2>লগইন করুন</h2>
+      <label>ইমেইল</label>
+      <input type="email" id="loginEmail" placeholder="you@example.com" />
+      <label>পাসওয়ার্ড</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" />
+      <button onclick="login()">লগইন</button>
+      <div id="loginMsg"></div>
+    </div>
+
+    <div class="card" id="registerCard" style="display:none;">
+      <h2>নতুন অ্যাকাউন্ট খুলুন</h2>
+      <label>নাম</label>
+      <input type="text" id="regName" placeholder="আপনার নাম" />
+      <label>ইমেইল</label>
+      <input type="email" id="regEmail" placeholder="you@example.com" />
+      <label>পাসওয়ার্ড</label>
+      <input type="password" id="regPassword" placeholder="কমপক্ষে ৬ অক্ষর" />
+      <button onclick="register()">রেজিস্ট্রেশন করুন</button>
+      <div id="registerMsg"></div>
+      <p class="hint">নোট: সিস্টেমে সবার প্রথম যিনি রেজিস্ট্রেশন করবেন, তিনি স্বয়ংক্রিয়ভাবে অ্যাডমিন হবেন।</p>
+    </div>
+  </div>
+
+  <script src="js/main.js"></script>
+  <script>
+    function showTab(tab) {
+      document.getElementById('loginCard').style.display = tab === 'login' ? 'block' : 'none';
+      document.getElementById('registerCard').style.display = tab === 'register' ? 'block' : 'none';
+      document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+      document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+    }
+
+    async function login() {
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      const msgEl = document.getElementById('loginMsg');
+      try {
+        const data = await apiPost('/api/login', { email, password });
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        window.location.href = data.user.role === 'admin' ? 'admin.html' : 'profile.html';
+      } catch (err) {
+        msgEl.innerHTML = `<div class="msg error">${err.message}</div>`;
+      }
+    }
+
+    async function register() {
+      const name = document.getElementById('regName').value;
+      const email = document.getElementById('regEmail').value;
+      const password = document.getElementById('regPassword').value;
+      const msgEl = document.getElementById('registerMsg');
+      try {
+        const data = await apiPost('/api/register', { name, email, password });
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        window.location.href = data.user.role === 'admin' ? 'admin.html' : 'profile.html';
+      } catch (err) {
+        msgEl.innerHTML = `<div class="msg error">${err.message}</div>`;
+      }
+    }
+
+    // ইতিমধ্যে লগইন করা থাকলে সরাসরি প্রোফাইলে পাঠিয়ে দাও
+    (function redirectIfLoggedIn() {
+      const token = localStorage.getItem('token');
+      const user = JSON.parse(localStorage.getItem('user') || 'null');
+      if (token && user) {
+        window.location.href = user.role === 'admin' ? 'admin.html' : 'profile.html';
+      }
+    })();
+  </script>
+</body>
+</html>

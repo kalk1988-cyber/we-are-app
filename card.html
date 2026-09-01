@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>তাশ — We Are</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="navbar">
+    <div class="brand">We Are</div>
+    <nav>
+      <a href="profile.html">প্রোফাইল</a>
+      <a href="games.html">গেমস</a>
+      <a href="#" onclick="logout()">লগআউট</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2>🃏 তাশ — রুম কোড: <span id="roomCodeLabel"></span></h2>
+      <p class="hint">নিয়ম: ট্রাম্প সবসময় ♠ স্পেড। প্রতিটি ট্রিকে যে লিড সুট দেওয়া হয়, সেটা থাকলে সেই সুটই খেলতে হবে। সবচেয়ে বেশি ট্রিক জেতা খেলোয়াড় বিজয়ী। ৪ আসনের কম হলে বাকি আসন বট দিয়ে পূরণ হবে।</p>
+      <div id="seatList" class="seat-list"></div>
+      <button id="startBtn" onclick="startGame()" style="display:none;">গেম শুরু করুন</button>
+      <div id="msg"></div>
+    </div>
+
+    <div class="card" id="gameCard" style="display:none;">
+      <div id="turnInfo" style="margin-bottom:10px; font-weight:600;"></div>
+      <div id="tricksInfo" style="margin-bottom:10px; font-size:13px; color:#6b7280;"></div>
+
+      <h3>বর্তমান ট্রিক</h3>
+      <div id="currentTrick" style="min-height:80px;"></div>
+
+      <h3>আপনার হাতের কার্ড</h3>
+      <div id="myHand"></div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+      <h3 id="resultText"></h3>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    requireLogin();
+    const params = new URLSearchParams(window.location.search);
+    const roomCode = params.get('room');
+    document.getElementById('roomCodeLabel').innerText = roomCode || '(কোড নেই)';
+
+    const me = JSON.parse(localStorage.getItem('user') || 'null');
+    const token = localStorage.getItem('token');
+    const socket = io();
+
+    if (!roomCode) {
+      document.getElementById('msg').innerHTML = '<div class="msg error">কোনো রুম কোড দেওয়া হয়নি</div>';
+    } else {
+      socket.emit('join-room', { roomCode, token });
+    }
+
+    socket.on('error-msg', (m) => {
+      document.getElementById('msg').innerHTML = `<div class="msg error">${m}</div>`;
+    });
+
+    socket.on('room-update', (data) => {
+      const seatList = document.getElementById('seatList');
+      seatList.innerHTML = '';
+      data.seats.forEach((s) => {
+        const chip = document.createElement('span');
+        chip.className = 'seat-chip';
+        chip.innerText = s.name;
+        seatList.appendChild(chip);
+      });
+      if (data.status === 'waiting') {
+        document.getElementById('startBtn').style.display = 'inline-block';
+      }
+    });
+
+    function startGame() {
+      socket.emit('start-game', { roomCode });
+    }
+
+    function suitClass(suit) {
+      return (suit === '♥' || suit === '♦') ? 'red-suit' : 'black-suit';
+    }
+
+    socket.on('card-state', (state) => {
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('gameCard').style.display = 'block';
+
+      const isMyTurn = state.currentPlayerId === me.id;
+      const currentPlayerObj = state.players.find(p => p.id === state.currentPlayerId);
+      document.getElementById('turnInfo').innerText = isMyTurn
+        ? '👉 এখন আপনার পালা'
+        : `⏳ ${currentPlayerObj ? currentPlayerObj.name : ''}-এর পালা`;
+
+      document.getElementById('tricksInfo').innerText =
+        'ট্রিক জেতা: ' + state.players.map(p => `${p.name}: ${state.tricksWon[p.id] || 0}`).join(' | ');
+
+      const trickEl = document.getElementById('currentTrick');
+      trickEl.innerHTML = '';
+      state.currentTrick.forEach((t) => {
+        const playerName = state.players.find(p => p.id === t.playerId)?.name || '';
+        const cardDiv = document.createElement('div');
+        cardDiv.style.display = 'inline-block';
+        cardDiv.style.textAlign = 'center';
+        cardDiv.innerHTML = `
+          <div class="playing-card ${suitClass(t.card.suit)}">${t.card.rank}${t.card.suit}</div>
+          <div style="font-size:11px;">${playerName}</div>
+        `;
+        trickEl.appendChild(cardDiv);
+      });
+
+      const handEl = document.getElementById('myHand');
+      handEl.innerHTML = '';
+      (state.myHand || []).forEach((c, idx) => {
+        const div = document.createElement('div');
+        const canPlay = isMyTurn;
+        div.className = `playing-card ${suitClass(c.suit)} ${canPlay ? '' : 'disabled'}`;
+        div.innerText = `${c.rank}${c.suit}`;
+        div.onclick = () => { if (canPlay) playCard(idx); };
+        handEl.appendChild(div);
+      });
+
+      if (state.winner) {
+        document.getElementById('resultCard').style.display = 'block';
+        const winnerName = state.players.find(p => p.id === state.winner)?.name;
+        document.getElementById('resultText').innerText = `🏆 বিজয়ী: ${winnerName}`;
+      }
+    });
+
+    function playCard(cardIdx) {
+      socket.emit('card-play', { roomCode, cardIdx });
+    }
+
+    socket.on('game-over', (data) => {
+      const msg = data.winnerId === me.id
+        ? `🎉 আপনি জিতেছেন! +${data.reward.winner} পয়েন্ট পেয়েছেন`
+        : `খেলা শেষ। অংশগ্রহণের জন্য +${data.reward.participant} পয়েন্ট পেয়েছেন`;
+      document.getElementById('msg').innerHTML = `<div class="msg success">${msg}</div>`;
+    });
+  </script>
+</body>
+</html>

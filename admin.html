@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>অ্যাডমিন প্যানেল — We Are</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="navbar">
+    <div class="brand">We Are — অ্যাডমিন</div>
+    <nav>
+      <a href="admin.html" class="active">অ্যাডমিন প্যানেল</a>
+      <a href="games.html">গেমস</a>
+      <a href="#" onclick="logout()">লগআউট</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2>ইউজার তালিকা</h2>
+      <table id="usersTable">
+        <thead>
+          <tr><th>নাম</th><th>ইমেইল</th><th>রোল</th><th>পয়েন্ট</th><th>অবস্থা</th><th>একশন</th></tr>
+        </thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/main.js"></script>
+  <script>
+    requireLogin();
+    requireAdmin();
+
+    async function loadUsers() {
+      const data = await apiGet('/api/admin/users');
+      const body = document.getElementById('usersBody');
+      body.innerHTML = '';
+      data.users.forEach((u) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(u.name)}</td>
+          <td>${escapeHtml(u.email)}</td>
+          <td><span class="badge ${u.role}">${u.role === 'admin' ? 'অ্যাডমিন' : 'ইউজার'}</span></td>
+          <td>🪙 ${(u.points || 0).toLocaleString('bn-BD')}</td>
+          <td>${u.banned ? '<span class="badge banned">নিষিদ্ধ</span>' : 'সক্রিয়'}</td>
+          <td>
+            ${u.role !== 'admin' ? `
+              <button class="small ${u.banned ? '' : 'danger'}" onclick="toggleBan('${u.id}', ${!u.banned})">${u.banned ? 'আনব্যান' : 'ব্যান'}</button>
+              <button class="small danger" onclick="deleteUser('${u.id}')">ডিলিট</button>
+            ` : '—'}
+          </td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.innerText = str;
+      return div.innerHTML;
+    }
+
+    async function toggleBan(id, banned) {
+      await apiPut(`/api/admin/users/${id}/ban`, { banned });
+      loadUsers();
+    }
+
+    async function deleteUser(id) {
+      if (!confirm('আপনি কি নিশ্চিত এই ইউজারকে ডিলিট করতে চান?')) return;
+      await apiDelete(`/api/admin/users/${id}`);
+      loadUsers();
+    }
+
+    loadUsers();
+  </script>
+</body>
+</html>
